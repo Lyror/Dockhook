@@ -68,13 +68,17 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     }
 
     if (!locks.tryAcquire(targetName)) {
+      logger.info('target_busy', { ip: request.ip, action, target: targetName });
       return reply.code(409).send({ error: `target "${targetName}" is busy` });
     }
 
-    logger.info('deploy_requested', { ip: request.ip, action, target: targetName });
-    const startedAt = Date.now();
-
+    // Everything from here on must run inside this try/finally: if
+    // logger.info below (or anything else) throws before the finally is
+    // reached, the lock would otherwise never be released.
     try {
+      logger.info('deploy_requested', { ip: request.ip, action, target: targetName });
+      const startedAt = Date.now();
+
       let result: ActionResult;
       if (action === 'update_container') {
         result = await executor.updateContainer((target as { name: string }).name);

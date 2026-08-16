@@ -91,6 +91,24 @@ export async function updateContainer(
     };
   }
 
+  // The template's internal <Name> drives `docker run --name`, while every
+  // other docker call in this function operates on the resolved, allowlisted
+  // containerName. If those two ever disagree (a typo, a renamed container
+  // whose template wasn't regenerated), we would stop/remove one container
+  // but create a different one outside the allowlist mapping. Refuse instead.
+  if (template.name !== containerName) {
+    deps.logger.error('template_name_mismatch', {
+      container: containerName,
+      templateName: template.name,
+      templatePath,
+    });
+    return {
+      ok: false,
+      message: `template for "${containerName}" declares a different container name ("${template.name}") — check the target mapping under Settings -> Dockhook and the template's <Name> element`,
+      output: `expected container: ${containerName}\ntemplate declares: ${template.name}\ntemplate: ${templatePath}`,
+    };
+  }
+
   // Recorded up front so a failed recreate can be rolled back by hand. The old
   // image is never deleted, so this id stays resolvable.
   const inspect = await deps.run(

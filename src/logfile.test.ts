@@ -54,4 +54,14 @@ describe('createRotatingWriter', () => {
       createRotatingWriter({ path: '/var/log/uw.log', maxBytes: 1000, ops })('x\n'),
     ).not.toThrow();
   });
+
+  it('does not throw when append itself fails (e.g. ENOSPC)', () => {
+    const { ops } = makeOps();
+    ops.append = () => {
+      throw new Error('ENOSPC');
+    };
+    expect(() =>
+      createRotatingWriter({ path: '/var/log/uw.log', maxBytes: 1000, ops })('x\n'),
+    ).not.toThrow();
+  });
 });

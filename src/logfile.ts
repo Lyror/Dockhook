@@ -29,6 +29,11 @@ export function createRotatingWriter(options: RotatingWriterOptions): (line: str
     } catch {
       // No log file yet, or it vanished — appending recreates it.
     }
-    ops.append(path, line);
+    try {
+      ops.append(path, line);
+    } catch {
+      // Logging must never crash the caller (e.g. a hung lock on ENOSPC), and
+      // there is nowhere better to report a logging failure that isn't circular.
+    }
   };
 }

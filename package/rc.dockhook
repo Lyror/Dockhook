@@ -7,6 +7,7 @@ NODE="$BASE/bin/node"
 APP="$BASE/dockhook.mjs"
 PIDFILE="/var/run/$NAME.pid"
 LOGFILE="/var/log/$NAME.log"
+STARTUP_LOG="/var/log/dockhook.startup.log"
 CONFIG="/boot/config/plugins/$NAME/$NAME.cfg"
 
 is_running() {
@@ -23,13 +24,13 @@ start() {
     return 1
   fi
   echo "Starting $NAME..."
-  nohup "$NODE" "$APP" >>"$LOGFILE" 2>&1 &
+  nohup "$NODE" "$APP" >>"$STARTUP_LOG" 2>&1 &
   echo $! > "$PIDFILE"
   sleep 1
   if is_running; then
     echo "$NAME started (pid $(cat "$PIDFILE"))"
   else
-    echo "$NAME failed to start — see $LOGFILE"
+    echo "$NAME failed to start — see $STARTUP_LOG"
     rm -f "$PIDFILE"
     return 1
   fi

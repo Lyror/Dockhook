@@ -234,4 +234,63 @@ describe('POST /deploy dispatch', () => {
     expect(entry.action).toBe('restart_container');
     expect(entry.target).toBe('myapp');
   });
+
+  it('logs target_busy with the ip on the 409 path', async () => {
+    const locks = new TargetLocks();
+    locks.tryAcquire('myapp');
+
+    const server = buildServer({
+      config,
+      logger: createLogger((line) => lines.push(line)),
+      locks,
+      executor,
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    const entry = lines.map((l) => JSON.parse(l)).find((e) => e.event === 'target_busy');
+    expect(entry).toBeDefined();
+    expect(entry.target).toBe('myapp');
+    expect(entry.ip).toBeDefined();
+  });
+
+  it('releases the lock even when logger.info throws for deploy_requested', async () => {
+    const locks = new TargetLocks();
+    const throwingLogger = {
+      info: vi.fn((event: string, fields: Record<string, unknown>) => {
+        if (event === 'deploy_requested') throw new Error('disk full');
+        lines.push(JSON.stringify({ event, ...fields }));
+      }),
+      error: vi.fn((event: string, fields: Record<string, unknown>) => {
+        lines.push(JSON.stringify({ event, ...fields }));
+      }),
+    };
+
+    const server = buildServer({
+      config,
+      logger: throwingLogger,
+      locks,
+      executor,
+    });
+
+    const request = {
+      method: 'POST' as const,
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp' },
+    };
+
+    // The first request's logger.info throws; the handler must still release
+    // the lock so a second request for the same target is not stuck at 409.
+    await server.inject(request);
+
+    const second = await server.inject(request);
+    expect(second.statusCode).not.toBe(409);
+  });
 });

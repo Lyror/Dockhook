@@ -278,6 +278,34 @@ describe('updateContainer', () => {
     expect(subcommands).not.toContain('prune');
   });
 
+  it('refuses to run when the template <Name> differs from the requested container', async () => {
+    const lines: string[] = [];
+    const deps = makeDeps(happyPath, lines);
+    deps.readFile = vi.fn(async () => `<?xml version="1.0"?>
+<Container version="2">
+  <Name>otherapp</Name>
+  <Repository>nexus.example.com/myapp:latest</Repository>
+  <Network>bridge</Network>
+</Container>`);
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('myapp');
+      expect(result.message).toContain('otherapp');
+    }
+    expect(deps.run).not.toHaveBeenCalled();
+
+    const entry = lines
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event === 'template_name_mismatch');
+    expect(entry).toBeDefined();
+    expect(entry.level).toBe('error');
+    expect(entry.container).toBe('myapp');
+    expect(entry.templateName).toBe('otherapp');
+  });
+
   it('succeeds on a first deploy where the container does not exist yet', async () => {
     const deps = makeDeps((command, args) => {
       if (args[0] === 'inspect' && args[2] === '{{.State.Running}}') return running('true');

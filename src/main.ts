@@ -30,10 +30,7 @@ async function readOrEmpty(path: string): Promise<string> {
 
 async function main(): Promise<void> {
   const writeLine = createRotatingWriter({ path: LOG_PATH, maxBytes: LOG_MAX_BYTES });
-  const logger = createLogger((line) => {
-    writeLine(line);
-    process.stdout.write(line);
-  });
+  const logger = createLogger(writeLine);
 
   let config;
   try {
