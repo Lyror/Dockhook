@@ -103,6 +103,20 @@ npm run typecheck
 npm run build     # bundles to dist/dockhook.mjs
 ```
 
+## Releasing
+
+`dockhook.plg` ships with placeholder `gitURL` and `md5` entities — it is not
+installable as committed. Before publishing a release:
+
+1. Run `./scripts/build-txz.sh <version>` to produce the `.txz` and its `.md5` file.
+2. Edit `dockhook.plg`: set `gitURL` to the real repository's raw-content URL, set
+   `version` to match what was just built, and set `md5` to the contents of the printed
+   `.md5` file (or `build/dockhook-<version>-x86_64-1.txz.md5`).
+3. Publish the `.txz` and the edited `.plg` at that URL (e.g. as a GitHub release or on
+   `main`).
+
+Only then does step 2 of Install ("paste the URL of `dockhook.plg`") work.
+
 ## Not included
 
 - Automatic rollback after a failed update (the degraded state is logged in full and the
