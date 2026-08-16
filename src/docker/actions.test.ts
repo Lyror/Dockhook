@@ -181,6 +181,62 @@ describe('updateContainer', () => {
     }
   });
 
+  it('does not recreate when rm fails for a reason other than a missing container', async () => {
+    const lines: string[] = [];
+    const calls: string[][] = [];
+    const deps = makeDeps((command, args) => {
+      calls.push(args);
+      if (args[0] === 'rm') return fail('Error response from daemon: container is running');
+      return happyPath(command, args);
+    }, lines);
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(calls.map((a) => a[0])).not.toContain('run');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).not.toMatch(/was removed/i);
+      expect(result.message).not.toMatch(/it is not running/i);
+      expect(result.message).toMatch(/may still be running/i);
+    }
+
+    const entry = lines
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event === 'container_update_removal_failed');
+    expect(entry).toBeDefined();
+    expect(entry.level).toBe('error');
+    expect(entry.container).toBe('myapp');
+    expect(entry.step).toBe('rm');
+    expect(entry.exitCode).toBe(1);
+    expect(entry.output).toContain('container is running');
+  });
+
+  it('does not recreate when stop fails for a reason other than a missing container', async () => {
+    const lines: string[] = [];
+    const calls: string[][] = [];
+    const deps = makeDeps((command, args) => {
+      calls.push(args);
+      if (args[0] === 'stop') return fail('Error response from daemon: timeout');
+      return happyPath(command, args);
+    }, lines);
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(calls.map((a) => a[0])).not.toContain('rm');
+    expect(calls.map((a) => a[0])).not.toContain('run');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).not.toMatch(/was removed/i);
+      expect(result.message).toMatch(/may still be running/i);
+    }
+
+    const entry = lines
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event === 'container_update_removal_failed');
+    expect(entry).toBeDefined();
+    expect(entry.step).toBe('stop');
+  });
+
   it('waits before the health check', async () => {
     const deps = makeDeps(happyPath);
     await updateContainer(deps, 'myapp');

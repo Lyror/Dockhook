@@ -127,9 +127,41 @@ export async function updateContainer(
     };
   }
 
-  // A missing container is fine here: this may be the first deploy.
-  await deps.run('docker', ['stop', containerName], { timeoutMs: deps.timeoutMs });
-  await deps.run('docker', ['rm', containerName], { timeoutMs: deps.timeoutMs });
+  // A missing container is fine here: this may be the first deploy. Any other
+  // failure means the old container may still exist — and still be running —
+  // so it would be wrong to proceed to `docker run` and later report it as
+  // "removed and not running".
+  const stop = await deps.run('docker', ['stop', containerName], { timeoutMs: deps.timeoutMs });
+  if (stop.code !== 0 && !saysNoSuchContainer(stop)) {
+    deps.logger.error('container_update_removal_failed', {
+      container: containerName,
+      step: 'stop',
+      exitCode: stop.code,
+      timedOut: stop.timedOut,
+      output: combined(stop),
+    });
+    return {
+      ok: false,
+      message: `${containerName} could not be stopped/removed — it may still be running; nothing was recreated`,
+      output: combined(stop),
+    };
+  }
+
+  const rm = await deps.run('docker', ['rm', containerName], { timeoutMs: deps.timeoutMs });
+  if (rm.code !== 0 && !saysNoSuchContainer(rm)) {
+    deps.logger.error('container_update_removal_failed', {
+      container: containerName,
+      step: 'rm',
+      exitCode: rm.code,
+      timedOut: rm.timedOut,
+      output: combined(rm),
+    });
+    return {
+      ok: false,
+      message: `${containerName} could not be stopped/removed — it may still be running; nothing was recreated`,
+      output: combined(rm),
+    };
+  }
 
   const runArgs = buildRunArgs(template);
   const created = await deps.run('docker', runArgs, { timeoutMs: deps.timeoutMs });
