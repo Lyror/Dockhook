@@ -17,6 +17,13 @@ function fail(string $message): void {
   exit(json_encode(['ok' => false, 'error' => $message]));
 }
 
+// The allowlist regex below permits dot-only strings like "." or ".." since
+// every character is individually within the allowed class. Reject those
+// explicitly to match the TypeScript side's isSafeName() guard.
+function isDotOnly(string $s): bool {
+  return preg_match('/^\.+$/', $s) === 1;
+}
+
 // Parallel arrays from the repeating form rows.
 $names  = $_POST['target_name'] ?? [];
 $kinds  = $_POST['target_kind'] ?? [];
@@ -40,6 +47,9 @@ foreach ($names as $i => $name) {
   if (!preg_match($safe, $name)) {
     fail("Target name \"$name\" may only contain letters, digits, dot, dash and underscore.");
   }
+  if (isDotOnly($name)) {
+    fail("Target name \"$name\" may not be only dots.");
+  }
   if (isset($seen[$name])) {
     fail("Target \"$name\" is listed twice.");
   }
@@ -48,6 +58,9 @@ foreach ($names as $i => $name) {
   }
   if (!preg_match($safe, $value)) {
     fail("Target \"$name\": the container name or script id is missing or invalid.");
+  }
+  if (isDotOnly($value)) {
+    fail("Target \"$name\": the container name or script id may not be only dots.");
   }
   $seen[$name] = true;
 
