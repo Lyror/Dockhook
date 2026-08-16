@@ -1,0 +1,90 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "dockhook">
+<!ENTITY author    "Lyror">
+<!ENTITY version   "2026.08.16">
+<!ENTITY launch    "Settings/Dockhook">
+<!ENTITY gitURL    "https://github.com/Lyror/Dockhook/raw/main">
+<!ENTITY pluginURL "&gitURL;/&name;.plg">
+<!ENTITY txzURL    "&gitURL;/build/&name;-&version;-x86_64-1.txz">
+<!ENTITY md5       "CHANGEME">
+<!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+<!ENTITY boot      "/boot/config/plugins/&name;">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;">
+
+<CHANGES>
+###&version;
+- Initial release: container update, container restart and user script execution via HTTP webhook.
+</CHANGES>
+
+<!-- Refuse to install on unsupported releases. -->
+<FILE Run="/bin/bash" Method="install">
+<INLINE>
+if [ ! -f /etc/unraid-version ]; then
+  echo "**** This plugin requires Unraid OS ****"
+  exit 1
+fi
+source /etc/unraid-version
+if [ "$(printf '%s\n6.12.15\n' "$version" | sort -V | head -n1)" != "6.12.15" ]; then
+  echo "**** This plugin requires Unraid 6.12.15 or newer (found $version) ****"
+  exit 1
+fi
+mkdir -p &boot;
+</INLINE>
+</FILE>
+
+<!-- Download and install the package. -->
+<FILE Name="&boot;/&name;-&version;-x86_64-1.txz" Run="upgradepkg --install-new">
+<URL>&txzURL;</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<!-- Seed a default config on first install, then start the service. -->
+<FILE Run="/bin/bash" Method="install">
+<INLINE>
+if [ ! -f &boot;/&name;.cfg ]; then
+  TOKEN=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  cat > &boot;/&name;.cfg &lt;&lt;EOF
+TOKEN="$TOKEN"
+PORT="8377"
+BIND_ADDRESS="0.0.0.0"
+ACTION_TIMEOUT_MS="600000"
+EOF
+  chmod 600 &boot;/&name;.cfg
+  echo "A random webhook token was generated. Find it under Settings -> Dockhook."
+fi
+
+if [ ! -f &boot;/targets.cfg ]; then
+  printf '# Target mappings, managed from Settings -> Dockhook\n' > &boot;/targets.cfg
+  chmod 600 &boot;/targets.cfg
+fi
+
+# Drop stale packages from earlier versions to keep the flash drive tidy.
+find &boot; -name "&name;-*.txz" ! -name "&name;-&version;-x86_64-1.txz" -delete
+
+/etc/rc.d/rc.dockhook restart
+
+echo ""
+echo "----------------------------------------------------"
+echo " &name; &version; has been installed."
+echo " Configure it under Settings -> Dockhook"
+echo "----------------------------------------------------"
+echo ""
+</INLINE>
+</FILE>
+
+<!-- Uninstall: stop the service, remove the package, keep the config. -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+/etc/rc.d/rc.dockhook stop 2>/dev/null
+removepkg &name; 2>/dev/null
+rm -rf &emhttp;
+rm -rf /usr/local/dockhook
+rm -f &boot;/*.txz
+echo "&name; removed. The configuration in &boot; was kept."
+</INLINE>
+</FILE>
+
+</PLUGIN>

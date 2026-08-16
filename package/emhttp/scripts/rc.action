@@ -1,0 +1,3 @@
+#!/bin/bash
+# Invoked by /update.php via the #command hidden field after settings are saved.
+/etc/rc.d/rc.dockhook "${1:-restart}"
