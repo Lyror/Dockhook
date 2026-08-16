@@ -2,12 +2,12 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "dockhook">
 <!ENTITY author    "Lyror">
-<!ENTITY version   "2026.08.16">
+<!ENTITY version   "0.1.0">
 <!ENTITY launch    "Settings/Dockhook">
 <!ENTITY gitURL    "https://github.com/Lyror/Dockhook/raw/main">
 <!ENTITY pluginURL "&gitURL;/&name;.plg">
 <!ENTITY txzURL    "&gitURL;/build/&name;-&version;-x86_64-1.txz">
-<!ENTITY md5       "CHANGEME">
+<!ENTITY md5       "d14c992dbc3cd317bee1bce8c93cb0b1">
 <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 <!ENTITY boot      "/boot/config/plugins/&name;">
 ]>
@@ -41,28 +41,11 @@ mkdir -p &boot;
 <MD5>&md5;</MD5>
 </FILE>
 
-<!-- Seed a default config on first install, then start the service. -->
+<!-- Start the service. rc.dockhook seeds a default config itself on
+     first start, so this works the same whether installed via the plugin
+     manager or by dropping the .txz directly under /boot/extra. -->
 <FILE Run="/bin/bash" Method="install">
 <INLINE>
-if [ ! -f &boot;/&name;.cfg ]; then
-  TOKEN=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
-  cat > &boot;/&name;.cfg.tmp &lt;&lt;EOF
-TOKEN="$TOKEN"
-PORT="8377"
-BIND_ADDRESS="0.0.0.0"
-ACTION_TIMEOUT_MS="600000"
-EOF
-  chmod 600 &boot;/&name;.cfg.tmp
-  mv &boot;/&name;.cfg.tmp &boot;/&name;.cfg
-  echo "A random webhook token was generated. Find it under Settings -> Dockhook."
-fi
-
-if [ ! -f &boot;/targets.cfg ]; then
-  printf '# Target mappings, managed from Settings -> Dockhook\n' > &boot;/targets.cfg.tmp
-  chmod 600 &boot;/targets.cfg.tmp
-  mv &boot;/targets.cfg.tmp &boot;/targets.cfg
-fi
-
 # Drop stale packages from earlier versions to keep the flash drive tidy.
 find &boot; -name "&name;-*.txz" ! -name "&name;-&version;-x86_64-1.txz" -delete
 
