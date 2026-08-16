@@ -16,6 +16,12 @@ export interface Config {
 
 const SAFE_NAME = /^[A-Za-z0-9._-]+$/;
 
+function isSafeName(value: string): boolean {
+  // Reject dot-only values to prevent path traversal (e.g., ".", "..", "...")
+  if (/^\.+$/.test(value)) return false;
+  return SAFE_NAME.test(value);
+}
+
 function integer(
   raw: string | undefined,
   fallback: number,
@@ -39,7 +45,7 @@ function parseTarget(key: string, section: Record<string, string>): Target {
 
   if (kind === 'container') {
     const name = section['NAME'];
-    if (!name || !SAFE_NAME.test(name)) {
+    if (!name || !isSafeName(name)) {
       throw new ConfigError(`target "${key}": NAME must match ${SAFE_NAME.source}`);
     }
     return { kind: 'container', name };
@@ -47,7 +53,7 @@ function parseTarget(key: string, section: Record<string, string>): Target {
 
   if (kind === 'script') {
     const id = section['ID'];
-    if (!id || !SAFE_NAME.test(id)) {
+    if (!id || !isSafeName(id)) {
       throw new ConfigError(`target "${key}": ID must match ${SAFE_NAME.source}`);
     }
     return { kind: 'script', id };
@@ -78,7 +84,7 @@ export function parseConfig(
 
   const targets: Record<string, Target> = {};
   for (const [key, section] of Object.entries(rawTargets)) {
-    if (!SAFE_NAME.test(key)) {
+    if (!isSafeName(key)) {
       throw new ConfigError(`target key "${key}" must match ${SAFE_NAME.source}`);
     }
     targets[key] = parseTarget(key, section);

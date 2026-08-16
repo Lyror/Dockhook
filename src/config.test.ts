@@ -74,6 +74,42 @@ describe('parseConfig', () => {
   it('accepts an empty targets file', () => {
     expect(parseConfig(settings, {}).targets).toEqual({});
   });
+
+  it('rejects a container name that is exactly ".."', () => {
+    expect(() =>
+      parseConfig(settings, { x: { KIND: 'container', NAME: '..' } }),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects a container name that is exactly "."', () => {
+    expect(() =>
+      parseConfig(settings, { x: { KIND: 'container', NAME: '.' } }),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects a script id that is exactly ".."', () => {
+    expect(() => parseConfig(settings, { x: { KIND: 'script', ID: '..' } })).toThrow(
+      ConfigError,
+    );
+  });
+
+  it('rejects a script id that is exactly "."', () => {
+    expect(() => parseConfig(settings, { x: { KIND: 'script', ID: '.' } })).toThrow(
+      ConfigError,
+    );
+  });
+
+  it('rejects a target key that is exactly ".."', () => {
+    expect(() =>
+      parseConfig(settings, { '..': { KIND: 'script', ID: 'ok' } }),
+    ).toThrow(ConfigError);
+  });
+
+  it('rejects a target key that is exactly "."', () => {
+    expect(() =>
+      parseConfig(settings, { '.': { KIND: 'script', ID: 'ok' } }),
+    ).toThrow(ConfigError);
+  });
 });
 
 describe('resolveTarget', () => {
