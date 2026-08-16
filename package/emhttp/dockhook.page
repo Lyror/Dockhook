@@ -1,0 +1,165 @@
+Menu="OtherSettings"
+Title="Dockhook"
+Icon="dockhook.png"
+---
+<?php
+$cfg = parse_plugin_cfg('dockhook');
+
+$targetsPath = '/boot/config/plugins/dockhook/targets.cfg';
+$targets = file_exists($targetsPath) ? parse_ini_file($targetsPath, true) : [];
+?>
+
+<div id="dh-status">Checking service status...</div>
+
+<form method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="csrf_token" value="<?=$var['csrf_token']?>" />
+<input type="hidden" name="#file" value="dockhook/dockhook.cfg" />
+<input type="hidden" name="#command" value="/usr/local/emhttp/plugins/dockhook/scripts/rc.action" />
+
+<dl>
+  <dt>Webhook token:</dt>
+  <dd><input type="text" name="TOKEN" size="60" value="<?=htmlspecialchars($cfg['TOKEN'])?>" required /></dd>
+</dl>
+
+<blockquote class="inline_help">
+<p>The shared secret your pipeline sends in the <code>X-Webhook-Token</code> header.
+At least 16 characters.</p>
+</blockquote>
+
+<dl>
+  <dt>Listen port:</dt>
+  <dd><input type="number" name="PORT" min="1" max="65535" value="<?=htmlspecialchars($cfg['PORT'])?>" required /></dd>
+</dl>
+
+<dl>
+  <dt>Bind address:</dt>
+  <dd><input type="text" name="BIND_ADDRESS" value="<?=htmlspecialchars($cfg['BIND_ADDRESS'])?>" required /></dd>
+</dl>
+
+<blockquote class="inline_help">
+<p>Use <code>0.0.0.0</code> to listen on every interface, or a specific LAN address to
+restrict access. Never expose this port to the internet.</p>
+</blockquote>
+
+<dl>
+  <dt>Action timeout (ms):</dt>
+  <dd><input type="number" name="ACTION_TIMEOUT_MS" min="1000" value="<?=htmlspecialchars($cfg['ACTION_TIMEOUT_MS'])?>" required /></dd>
+</dl>
+
+<dl>
+  <dt>&nbsp;</dt>
+  <dd>
+    <input type="submit" value="Apply" />
+    <input type="button" value="Done" onclick="done()" />
+  </dd>
+</dl>
+</form>
+
+<hr />
+
+<form id="dh-targets-form" onsubmit="return false;">
+<table class="tablesorter" id="dh-targets-table">
+  <thead>
+    <tr><th>Target name</th><th>Kind</th><th>Container name / script id</th><th>&nbsp;</th></tr>
+  </thead>
+  <tbody>
+<?php foreach ($targets as $name => $target): ?>
+    <tr>
+      <td><input type="text" name="target_name[]" value="<?=htmlspecialchars($name)?>" /></td>
+      <td>
+        <select name="target_kind[]">
+          <option value="container" <?=($target['KIND']=='container')?'selected':''?>>container</option>
+          <option value="script" <?=($target['KIND']=='script')?'selected':''?>>script</option>
+        </select>
+      </td>
+      <td><input type="text" name="target_value[]" value="<?=htmlspecialchars($target['NAME'] ?? $target['ID'] ?? '')?>" /></td>
+      <td><input type="button" value="Remove" onclick="dhRemoveRow(this)" /></td>
+    </tr>
+<?php endforeach; ?>
+  </tbody>
+</table>
+
+<blockquote class="inline_help">
+<p><strong>Target name</strong> is the symbolic name your pipeline sends as
+<code>target</code>. For <code>container</code> targets the third column is the container
+name exactly as shown on the Docker tab. For <code>script</code> targets it is the folder
+name under <code>/boot/config/plugins/user.scripts/scripts/</code>.</p>
+</blockquote>
+
+<dl>
+  <dt>&nbsp;</dt>
+  <dd>
+    <input type="button" value="Add target" onclick="dhAddRow()" />
+    <input type="button" value="Apply targets" onclick="dhSaveTargets()" />
+  </dd>
+</dl>
+</form>
+
+<hr />
+
+<dl>
+  <dt>Service:</dt>
+  <dd>
+    <input type="button" value="Start" onclick="dhService('start')" />
+    <input type="button" value="Stop" onclick="dhService('stop')" />
+    <input type="button" value="Refresh log" onclick="dhLoadLog()" />
+  </dd>
+</dl>
+
+<pre id="dh-log" style="max-height:400px;overflow:auto"></pre>
+
+<script>
+const dhCsrf = '<?=$var['csrf_token']?>';
+const dhStatusUrl  = '/plugins/dockhook/include/status.php';
+const dhTargetsUrl = '/plugins/dockhook/include/targets.php';
+
+function dhStatus() {
+  $.post(dhStatusUrl, { csrf_token: dhCsrf, action: 'status' }, function (data) {
+    $('#dh-status').html(data.running
+      ? '<span style="color:green">&#9679; Service is running</span>'
+      : '<span style="color:red">&#9679; Service is stopped</span>');
+  }, 'json');
+}
+
+function dhService(what) {
+  $.post(dhStatusUrl, { csrf_token: dhCsrf, action: what }, function () {
+    dhStatus();
+    dhLoadLog();
+  }, 'json');
+}
+
+function dhLoadLog() {
+  $.post(dhStatusUrl, { csrf_token: dhCsrf, action: 'log' }, function (data) {
+    $('#dh-log').text(data.log);
+  }, 'json');
+}
+
+function dhAddRow() {
+  $('#dh-targets-table tbody').append(
+    '<tr>' +
+    '<td><input type="text" name="target_name[]" value="" /></td>' +
+    '<td><select name="target_kind[]">' +
+    '<option value="container">container</option>' +
+    '<option value="script">script</option></select></td>' +
+    '<td><input type="text" name="target_value[]" value="" /></td>' +
+    '<td><input type="button" value="Remove" onclick="dhRemoveRow(this)" /></td>' +
+    '</tr>'
+  );
+}
+
+function dhRemoveRow(button) {
+  $(button).closest('tr').remove();
+}
+
+function dhSaveTargets() {
+  const payload = $('#dh-targets-form').serializeArray();
+  payload.push({ name: 'csrf_token', value: dhCsrf });
+  $.post(dhTargetsUrl, $.param(payload), function (data) {
+    if (!data.ok) { swal({ title: 'Invalid targets', text: data.error, type: 'error' }); return; }
+    dhStatus();
+    dhLoadLog();
+  }, 'json');
+}
+
+$(function () { dhStatus(); dhLoadLog(); });
+</script>

@@ -1,0 +1,66 @@
+<?php
+// Writes the sectioned targets.cfg. /update.php only handles flat .cfg files,
+// so this endpoint exists — and therefore must validate the CSRF token itself.
+
+$var = parse_ini_file('/var/local/emhttp/var.ini');
+if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $var['csrf_token']) {
+  http_response_code(403);
+  exit(json_encode(['ok' => false, 'error' => 'Security token validation failed']));
+}
+
+header('Content-Type: application/json');
+
+$targetsPath = '/boot/config/plugins/dockhook/targets.cfg';
+$rcScript    = '/etc/rc.d/rc.dockhook';
+
+function fail(string $message): void {
+  exit(json_encode(['ok' => false, 'error' => $message]));
+}
+
+// Parallel arrays from the repeating form rows.
+$names  = $_POST['target_name'] ?? [];
+$kinds  = $_POST['target_kind'] ?? [];
+$values = $_POST['target_value'] ?? [];
+
+if (!is_array($names) || !is_array($kinds) || !is_array($values)) {
+  fail('Malformed submission.');
+}
+
+$safe = '/^[A-Za-z0-9._-]+$/';
+$seen = [];
+$out  = "# Target mappings, managed from Settings -> Dockhook\n";
+
+foreach ($names as $i => $name) {
+  $name  = trim($name);
+  $kind  = trim($kinds[$i] ?? '');
+  $value = trim($values[$i] ?? '');
+
+  if ($name === '' && $value === '') continue;
+
+  if (!preg_match($safe, $name)) {
+    fail("Target name \"$name\" may only contain letters, digits, dot, dash and underscore.");
+  }
+  if (isset($seen[$name])) {
+    fail("Target \"$name\" is listed twice.");
+  }
+  if (!in_array($kind, ['container', 'script'], true)) {
+    fail("Target \"$name\": kind must be container or script.");
+  }
+  if (!preg_match($safe, $value)) {
+    fail("Target \"$name\": the container name or script id is missing or invalid.");
+  }
+  $seen[$name] = true;
+
+  $key  = $kind === 'container' ? 'NAME' : 'ID';
+  $out .= "\n[$name]\nKIND=\"$kind\"\n$key=\"$value\"\n";
+}
+
+// Atomic write so a crash cannot leave a half-written file on the flash drive.
+$tmp = $targetsPath . '.tmp';
+if (file_put_contents($tmp, $out) === false || !rename($tmp, $targetsPath)) {
+  fail('Could not write targets.cfg.');
+}
+chmod($targetsPath, 0600);
+
+exec("$rcScript restart 2>&1", $output, $code);
+echo json_encode(['ok' => true, 'detail' => implode("\n", $output)]);
