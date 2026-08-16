@@ -46,19 +46,21 @@ mkdir -p &boot;
 <INLINE>
 if [ ! -f &boot;/&name;.cfg ]; then
   TOKEN=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
-  cat > &boot;/&name;.cfg &lt;&lt;EOF
+  cat > &boot;/&name;.cfg.tmp &lt;&lt;EOF
 TOKEN="$TOKEN"
 PORT="8377"
 BIND_ADDRESS="0.0.0.0"
 ACTION_TIMEOUT_MS="600000"
 EOF
-  chmod 600 &boot;/&name;.cfg
+  chmod 600 &boot;/&name;.cfg.tmp
+  mv &boot;/&name;.cfg.tmp &boot;/&name;.cfg
   echo "A random webhook token was generated. Find it under Settings -> Dockhook."
 fi
 
 if [ ! -f &boot;/targets.cfg ]; then
-  printf '# Target mappings, managed from Settings -> Dockhook\n' > &boot;/targets.cfg
-  chmod 600 &boot;/targets.cfg
+  printf '# Target mappings, managed from Settings -> Dockhook\n' > &boot;/targets.cfg.tmp
+  chmod 600 &boot;/targets.cfg.tmp
+  mv &boot;/targets.cfg.tmp &boot;/targets.cfg
 fi
 
 # Drop stale packages from earlier versions to keep the flash drive tidy.
