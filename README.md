@@ -54,7 +54,7 @@ drives. The HTTP endpoint is the only exposed surface:
 - Payloads carry symbolic names only — no path, image name or command from a request
   ever reaches a shell
 - Rate limited to 30 requests per minute
-- Every request and outcome is logged with the source IP
+- Every request and access decision (accepted, rejected, or busy) is logged with the source IP; action outcomes are logged separately without it
 
 **Do not expose the port to the internet.** Keep it reachable from your GitLab runner
 network only, or put it behind a TLS reverse proxy.
