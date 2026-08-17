@@ -12,10 +12,13 @@ containers, restart them, or run a User Script after pushing an image to a Nexus
 
 ## Install
 
-1. Build the package: `./scripts/build-txz.sh` (or grab a release)
-2. In Unraid: Plugins → Install Plugin → paste the URL of `dockhook.plg`
-3. Configure targets under Settings → Dockhook
-4. Log in to your registry — see below
+1. In Unraid: Plugins → Install Plugin → paste
+   `https://github.com/Lyror/Dockhook/raw/main/dockhook.plg`
+2. Configure targets under Settings → Dockhook
+3. Log in to your registry — see below
+
+To install a build of your own instead, run `./scripts/build-txz.sh` and drop the
+resulting `.txz` into `/boot/extra`.
 
 A random token is generated on first install. Find it on the settings page.
 
@@ -108,17 +111,29 @@ npm run build     # bundles to dist/dockhook.mjs
 
 ## Releasing
 
-`dockhook.plg` ships with placeholder `gitURL` and `md5` entities — it is not
-installable as committed. Before publishing a release:
+Releases are built by `.github/workflows/release.yml` — a tag push is the whole
+procedure:
 
-1. Run `./scripts/build-txz.sh <version>` to produce the `.txz` and its `.md5` file.
-2. Edit `dockhook.plg`: set `gitURL` to the real repository's raw-content URL, set
-   `version` to match what was just built, and set `md5` to the contents of the printed
-   `.md5` file (or `build/dockhook-<version>-x86_64-1.txz.md5`).
-3. Publish the `.txz` and the edited `.plg` at that URL (e.g. as a GitHub release or on
-   `main`).
+1. Bump the version in **both** `package.json` and the `&version;` entity in
+   `dockhook.plg`, and add the entry to the `<CHANGES>` block in `dockhook.plg`
+   (that text is what Unraid shows in the plugin manager).
+2. Commit, then tag and push:
 
-Only then does step 2 of Install ("paste the URL of `dockhook.plg`") work.
+   ```bash
+   git tag v0.2.0 && git push origin main v0.2.0
+   ```
+
+The workflow refuses to build if the tag, `package.json` and `dockhook.plg` disagree on
+the version. Otherwise it runs the typecheck and tests, builds the `.txz`, publishes it
+as a GitHub release, and commits the resulting md5 back into `dockhook.plg` on `main`.
+
+That last step is what makes the plugin installable: `pluginURL` points at
+`.../raw/main/dockhook.plg`, a stable URL the Unraid plugin manager re-fetches to check
+for updates, while `txzURL` points at the release asset for that version. A freshly
+cloned `dockhook.plg` carries `md5="CHANGEME"` until the first release stamps it.
+
+To build a package by hand — for a manual install, or to drop into `/boot/extra` —
+`./scripts/build-txz.sh <version>` still writes the `.txz` and its `.md5` to `build/`.
 
 ## Not included
 

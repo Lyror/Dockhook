@@ -4,9 +4,9 @@
 <!ENTITY author    "Lyror">
 <!ENTITY version   "0.1.0">
 <!ENTITY launch    "Settings/Dockhook">
-<!ENTITY gitURL    "https://github.com/Lyror/Dockhook/raw/main">
-<!ENTITY pluginURL "&gitURL;/&name;.plg">
-<!ENTITY txzURL    "&gitURL;/build/&name;-&version;-x86_64-1.txz">
+<!ENTITY gitURL    "https://github.com/Lyror/Dockhook">
+<!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
+<!ENTITY txzURL    "&gitURL;/releases/download/v&version;/&name;-&version;-x86_64-1.txz">
 <!ENTITY md5       "CHANGEME">
 <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 <!ENTITY boot      "/boot/config/plugins/&name;">

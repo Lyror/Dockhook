@@ -1,0 +1,111 @@
+name: Release
+
+# Cutting a release is a tag push:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# This builds the .txz, publishes it as a GitHub release, stamps the resulting
+# md5 into dockhook.plg and commits that back to main — which is what makes the
+# .plg at the stable pluginURL installable and lets Unraid's plugin manager see
+# the new version.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Derive the version from the tag
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "VERSION=${tag#v}" >> "$GITHUB_ENV"
+
+      # The version lives in three places and the .txz filename is built from
+      # it, so a mismatch would produce a package the .plg cannot download.
+      - name: Check the tag, package.json and dockhook.plg agree
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          plg=$(grep -oP '<!ENTITY version\s+"\K[^"]+' dockhook.plg)
+          echo "tag=$VERSION package.json=$pkg dockhook.plg=$plg"
+          if [ "$VERSION" != "$pkg" ] || [ "$VERSION" != "$plg" ]; then
+            echo "::error::version mismatch — bump package.json and dockhook.plg to $VERSION before tagging"
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - name: Build the Slackware package
+        run: ./scripts/build-txz.sh "$VERSION"
+
+      - name: Stamp the md5 into dockhook.plg
+        run: |
+          md5=$(cat "build/dockhook-$VERSION-x86_64-1.txz.md5")
+          echo "md5=$md5"
+          sed -i -E "s|(<!ENTITY md5 +\")[^\"]*(\")|\1$md5\2|" dockhook.plg
+          grep '<!ENTITY md5' dockhook.plg
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(mktemp)
+          {
+            echo "Install in Unraid: **Plugins → Install Plugin** →"
+            echo '`https://github.com/${{ github.repository }}/raw/main/dockhook.plg`'
+            echo
+            echo "MD5 of the package: \`$(cat "build/dockhook-$VERSION-x86_64-1.txz.md5")\`"
+          } > "$notes"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "$notes" \
+            --generate-notes \
+            "build/dockhook-$VERSION-x86_64-1.txz" \
+            "build/dockhook-$VERSION-x86_64-1.txz.md5" \
+            "dockhook.plg"
+
+      - name: Commit the stamped dockhook.plg back to main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dockhook.plg "$RUNNER_TEMP/dockhook.plg"
+          git fetch origin main
+          # Refuse to touch main if the tag was cut from somewhere else — the
+          # .plg there would otherwise be replaced by an unrelated branch's.
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::warning::tag $TAG is not on main — leaving main's dockhook.plg alone"
+            exit 0
+          fi
+          git checkout -B main origin/main
+          cp "$RUNNER_TEMP/dockhook.plg" dockhook.plg
+          if git diff --quiet -- dockhook.plg; then
+            echo "dockhook.plg on main is already current"
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "chore: publish dockhook.plg for $TAG" -- dockhook.plg
+          git push origin main

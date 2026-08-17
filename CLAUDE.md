@@ -125,7 +125,13 @@ crash a request. Request/access events log the source IP; action outcomes do not
 
 ## Releasing
 
-`dockhook.plg` ships with placeholder `gitURL` and `md5` and is **not installable as
-committed**. Version appears in `package.json`, the `.plg`'s `&version;` entity, and the
-`.txz` filename — keep them in sync, and update `&md5;` from the `.md5` file
-`build-txz.sh` prints. Full steps in `README.md` § Releasing.
+Automated by `.github/workflows/release.yml` on a `v*` tag push: it verifies that the
+tag, `package.json` and the `.plg`'s `&version;` entity all agree, builds the `.txz`,
+publishes a GitHub release, then stamps the `.txz`'s md5 into `&md5;` and commits that
+`dockhook.plg` back to `main` (guarded by a `merge-base --is-ancestor` check, so a tag
+cut off `main` never rewrites it).
+
+The `.plg`'s `pluginURL` (`raw/main/dockhook.plg`) must stay stable — Unraid's plugin
+manager re-fetches exactly that URL to detect updates — while `txzURL` is version-pinned
+to the release asset. `<CHANGES>` is maintained by hand; it is what the plugin manager
+displays. Full steps in `README.md` § Releasing.

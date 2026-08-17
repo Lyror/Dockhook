@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
+
+      # Catches a version bump that only landed in one of the two files
+      # before it turns into a broken release tag.
+      - name: package.json and dockhook.plg agree on the version
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          plg=$(grep -oP '<!ENTITY version\s+"\K[^"]+' dockhook.plg)
+          echo "package.json=$pkg dockhook.plg=$plg"
+          [ "$pkg" = "$plg" ] || { echo "::error::version mismatch"; exit 1; }
