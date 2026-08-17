@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "dockhook">
 <!ENTITY author    "Lyror">
-<!ENTITY version   "0.1.0">
+<!ENTITY version   "0.2.0">
 <!ENTITY launch    "Settings/Dockhook">
 <!ENTITY gitURL    "https://github.com/Lyror/Dockhook">
 <!ENTITY pluginURL "&gitURL;/raw/main/&name;.plg">
@@ -16,6 +16,9 @@
 
 <CHANGES>
 ###&version;
+- Nicer plugin icon in Settings.
+
+###0.1.0
 - Initial release: container update, container restart and user script execution via HTTP webhook.
 </CHANGES>
 
