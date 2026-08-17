@@ -91,6 +91,13 @@ the documented remediation for this — so Unraid re-inspects it on the next che
 showing a stale badge indefinitely. This only touches the one entry for the container that
 was just updated — everything else in the cache is left alone.
 
+It then also calls Unraid's own `DockerUpdate::reloadUpdateStatus()` for that same image
+(the same API the WebGUI's "Check for Updates" button uses under the hood), so the badge
+clears immediately instead of waiting for Unraid's next scheduled check. Both steps are
+best-effort: if either fails (e.g. on an Unraid version where the path or class has
+changed), it's logged but never fails the update itself — the badge would just take until
+the next scheduled check to catch up instead of updating instantly.
+
 ## When an update fails
 
 If `docker pull` fails, the running container is left untouched. An `unauthorized` pull

@@ -360,8 +360,60 @@ describe('updateContainer', () => {
     expect(entry.container).toBe('myapp');
   });
 
+  it('asks unraid to reload the update status for the entry it just cleared', async () => {
+    const calls: [string, string[]][] = [];
+    const deps = makeDeps((command, args) => {
+      calls.push([command, args]);
+      return happyPath(command, args);
+    });
+    const cache = {
+      'nexus.example.com/myapp:latest': { local: 'sha256:old', remote: 'sha256:new', status: 'false' },
+    };
+    deps.readFile = vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      if (path === UNRAID_UPDATE_STATUS_PATH) return JSON.stringify(cache);
+      throw new Error('ENOENT');
+    });
+
+    await updateContainer(deps, 'myapp');
+
+    const phpCall = calls.find(([command]) => command === 'php');
+    expect(phpCall).toBeDefined();
+    const [, args] = phpCall!;
+    expect(args).toContain('nexus.example.com/myapp:latest');
+    expect(args.join(' ')).toContain('reloadUpdateStatus');
+  });
+
+  it('logs but does not fail the update when the unraid reload command fails', async () => {
+    const lines: string[] = [];
+    const deps = makeDeps((command, args) => {
+      if (command === 'php') return fail('php: command not found');
+      return happyPath(command, args);
+    }, lines);
+    const cache = {
+      'nexus.example.com/myapp:latest': { local: 'sha256:old', remote: 'sha256:new', status: 'false' },
+    };
+    deps.readFile = vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      if (path === UNRAID_UPDATE_STATUS_PATH) return JSON.stringify(cache);
+      throw new Error('ENOENT');
+    });
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(true);
+    const entry = lines
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event === 'unraid_update_reload_failed');
+    expect(entry).toBeDefined();
+  });
+
   it('leaves the unraid update-status cache untouched when no entry matches the previous image', async () => {
-    const deps = makeDeps(happyPath);
+    const calls: [string, string[]][] = [];
+    const deps = makeDeps((command, args) => {
+      calls.push([command, args]);
+      return happyPath(command, args);
+    });
     deps.readFile = vi.fn(async (path: string) => {
       if (path.endsWith('.xml')) return TEMPLATE;
       if (path === UNRAID_UPDATE_STATUS_PATH) {
@@ -374,6 +426,7 @@ describe('updateContainer', () => {
 
     expect(result.ok).toBe(true);
     expect(deps.writeFile).not.toHaveBeenCalled();
+    expect(calls.find(([command]) => command === 'php')).toBeUndefined();
   });
 
   it('does not touch the unraid update-status cache when the file does not exist', async () => {
