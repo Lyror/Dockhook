@@ -1,0 +1,8 @@
+<CommunityApplications>
+  <!-- Required profile -->
+  <Profile>
+    Maintainer of Dockhook, an Unraid plugin that exposes a token-authenticated HTTP endpoint so a CI pipeline can update, restart, or run a User Scripts entry against Docker containers on the host. Support and issues via GitHub.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/Lyror/Dockhook/main/package/emhttp/images/dockhook.png</Icon>
+  <WebPage>https://github.com/Lyror/Dockhook</WebPage>
+</CommunityApplications>

@@ -1,0 +1,34 @@
+<Plugin>
+  <!-- Required fields -->
+
+  <Name>Dockhook</Name>
+
+  <Overview>Exposes an HTTP endpoint on the Unraid host so a CI pipeline (e.g. GitLab CI) can trigger a Docker container update after a new image is pushed. update_container pulls the new image and recreates the container from its Unraid template, so it keeps its icon, ports, volumes and GUI integration; restart_container does a plain restart; run_userscript runs a User Scripts entry. Requests are authenticated with a shared token compared in constant time, and are restricted to an allowlist of named targets configured on the settings page - no path, image name or command from a request ever reaches a shell.</Overview>
+
+  <!-- NOTE: PluginURL must match exactly the URL of the PluginURL in the .plg file -->
+  <PluginURL>https://github.com/Lyror/Dockhook/raw/main/dockhook.plg</PluginURL>
+
+  <PluginAuthor>Lyror</PluginAuthor>
+
+
+  <!-- Optional entries -->
+
+  <Support>https://github.com/Lyror/Dockhook/issues</Support>
+
+  <Project>https://github.com/Lyror/Dockhook</Project>
+
+  <ReadMe>https://raw.githubusercontent.com/Lyror/Dockhook/main/README.md</ReadMe>
+
+  <!-- Valid category entries can be generated from the Application Categorizer plugin available in Apps -->
+  <Category>Tools:Utilities</Category>
+
+  <Beta>true</Beta>
+
+  <!-- Matches the Unraid version check in dockhook.plg's install step -->
+  <MinVer>6.12.15</MinVer>
+
+  <Icon>https://raw.githubusercontent.com/Lyror/Dockhook/main/package/emhttp/images/dockhook.png</Icon>
+
+  <License>MIT</License>
+
+</Plugin>
