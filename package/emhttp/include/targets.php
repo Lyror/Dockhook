@@ -34,22 +34,27 @@ function isDotOnly(string $s): bool {
 }
 
 // Parallel arrays from the repeating form rows.
-$names  = $_POST['target_name'] ?? [];
-$kinds  = $_POST['target_kind'] ?? [];
-$values = $_POST['target_value'] ?? [];
+$names    = $_POST['target_name'] ?? [];
+$kinds    = $_POST['target_kind'] ?? [];
+$values   = $_POST['target_value'] ?? [];
+$timeouts = $_POST['target_timeout'] ?? [];
 
-if (!is_array($names) || !is_array($kinds) || !is_array($values)) {
+if (!is_array($names) || !is_array($kinds) || !is_array($values) || !is_array($timeouts)) {
   fail('Malformed submission.');
 }
 
 $safe = '/^[A-Za-z0-9._-]+$/';
+// Same bounds as the TypeScript side's ACTION_TIMEOUT_MS / per-target TIMEOUT_MS.
+$timeoutMin = 1000;
+$timeoutMax = 24 * 60 * 60 * 1000;
 $seen = [];
 $out  = "# Target mappings, managed from Settings -> Dockhook\n";
 
 foreach ($names as $i => $name) {
-  $name  = trim($name);
-  $kind  = trim($kinds[$i] ?? '');
-  $value = trim($values[$i] ?? '');
+  $name    = trim($name);
+  $kind    = trim($kinds[$i] ?? '');
+  $value   = trim($values[$i] ?? '');
+  $timeout = trim($timeouts[$i] ?? '');
 
   if ($name === '' && $value === '') continue;
 
@@ -71,10 +76,16 @@ foreach ($names as $i => $name) {
   if (isDotOnly($value)) {
     fail("Target \"$name\": the container name or script id may not be only dots.");
   }
+  if ($timeout !== '' && (!preg_match('/^\d+$/', $timeout) || (int)$timeout < $timeoutMin || (int)$timeout > $timeoutMax)) {
+    fail("Target \"$name\": timeout override must be a whole number between $timeoutMin and $timeoutMax.");
+  }
   $seen[$name] = true;
 
   $key  = $kind === 'container' ? 'NAME' : 'ID';
   $out .= "\n[$name]\nKIND=\"$kind\"\n$key=\"$value\"\n";
+  if ($timeout !== '') {
+    $out .= "TIMEOUT_MS=\"$timeout\"\n";
+  }
 }
 
 // Atomic write so a crash cannot leave a half-written file on the flash drive.

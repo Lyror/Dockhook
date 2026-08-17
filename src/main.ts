@@ -78,9 +78,9 @@ async function main(): Promise<void> {
   };
 
   const executor: Executor = {
-    updateContainer: (name) => updateContainer(dockerDeps, name),
-    restartContainer: (name) => restartContainer(dockerDeps, name),
-    runUserScript: (id) => runUserScript(scriptDeps, id),
+    updateContainer: (name, timeoutMs) => updateContainer({ ...dockerDeps, timeoutMs }, name),
+    restartContainer: (name, timeoutMs) => restartContainer({ ...dockerDeps, timeoutMs }, name),
+    runUserScript: (id, timeoutMs) => runUserScript({ ...scriptDeps, timeoutMs }, id),
   };
 
   const app = buildServer({ config, logger, locks: new TargetLocks(), executor });

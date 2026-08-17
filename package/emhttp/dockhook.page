@@ -60,7 +60,7 @@ restrict access. Never expose this port to the internet.</p>
 <form id="dh-targets-form" onsubmit="return false;">
 <table class="tablesorter" id="dh-targets-table">
   <thead>
-    <tr><th>Target name</th><th>Kind</th><th>Container name / script id</th><th>&nbsp;</th></tr>
+    <tr><th>Target name</th><th>Kind</th><th>Container name / script id</th><th>Timeout override (ms)</th><th>&nbsp;</th></tr>
   </thead>
   <tbody>
 <?php foreach ($targets as $name => $target): ?>
@@ -73,6 +73,7 @@ restrict access. Never expose this port to the internet.</p>
         </select>
       </td>
       <td><input type="text" name="target_value[]" value="<?=htmlspecialchars($target['NAME'] ?? $target['ID'] ?? '')?>" /></td>
+      <td><input type="number" name="target_timeout[]" min="1000" placeholder="default" value="<?=htmlspecialchars($target['TIMEOUT_MS'] ?? '')?>" /></td>
       <td><input type="button" value="Remove" onclick="dhRemoveRow(this)" /></td>
     </tr>
 <?php endforeach; ?>
@@ -83,7 +84,9 @@ restrict access. Never expose this port to the internet.</p>
 <p><strong>Target name</strong> is the symbolic name your pipeline sends as
 <code>target</code>. For <code>container</code> targets the third column is the container
 name exactly as shown on the Docker tab. For <code>script</code> targets it is the folder
-name under <code>/boot/config/plugins/user.scripts/scripts/</code>.</p>
+name under <code>/boot/config/plugins/user.scripts/scripts/</code>. <strong>Timeout
+override</strong> is optional — leave it blank to use the global action timeout above;
+set it when this specific target (e.g. a long-running backup script) needs more time.</p>
 </blockquote>
 
 <dl>
@@ -142,6 +145,7 @@ function dhAddRow() {
     '<option value="container">container</option>' +
     '<option value="script">script</option></select></td>' +
     '<td><input type="text" name="target_value[]" value="" /></td>' +
+    '<td><input type="number" name="target_timeout[]" min="1000" placeholder="default" value="" /></td>' +
     '<td><input type="button" value="Remove" onclick="dhRemoveRow(this)" /></td>' +
     '</tr>'
   );

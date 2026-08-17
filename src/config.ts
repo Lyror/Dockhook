@@ -3,8 +3,8 @@ import type { Action } from './types.js';
 export class ConfigError extends Error {}
 
 export type Target =
-  | { kind: 'container'; name: string }
-  | { kind: 'script'; id: string };
+  | { kind: 'container'; name: string; timeoutMs?: number }
+  | { kind: 'script'; id: string; timeoutMs?: number };
 
 export interface Config {
   token: string;
@@ -40,15 +40,47 @@ function integer(
   return value;
 }
 
+// Like integer(), but returns undefined rather than a fallback when the key
+// is absent — callers need to distinguish "not set, use the global default"
+// from "explicitly set to X".
+function optionalInteger(
+  raw: string | undefined,
+  label: string,
+  min: number,
+  max: number,
+): number | undefined {
+  if (raw === undefined || raw.trim() === '') return undefined;
+  if (!/^\d+$/.test(raw.trim())) {
+    throw new ConfigError(`${label} must be a whole number, got "${raw}"`);
+  }
+  const value = Number(raw.trim());
+  if (value < min || value > max) {
+    throw new ConfigError(`${label} must be between ${min} and ${max}, got ${value}`);
+  }
+  return value;
+}
+
+function parseTargetTimeoutMs(key: string, section: Record<string, string>): number | undefined {
+  return optionalInteger(
+    section['TIMEOUT_MS'],
+    `target "${key}": TIMEOUT_MS`,
+    1000,
+    24 * 60 * 60 * 1000,
+  );
+}
+
 function parseTarget(key: string, section: Record<string, string>): Target {
   const kind = section['KIND'];
+  const timeoutMs = parseTargetTimeoutMs(key, section);
 
   if (kind === 'container') {
     const name = section['NAME'];
     if (!name || !isSafeName(name)) {
       throw new ConfigError(`target "${key}": NAME must match ${SAFE_NAME.source}`);
     }
-    return { kind: 'container', name };
+    return timeoutMs === undefined
+      ? { kind: 'container', name }
+      : { kind: 'container', name, timeoutMs };
   }
 
   if (kind === 'script') {
@@ -56,7 +88,7 @@ function parseTarget(key: string, section: Record<string, string>): Target {
     if (!id || !isSafeName(id)) {
       throw new ConfigError(`target "${key}": ID must match ${SAFE_NAME.source}`);
     }
-    return { kind: 'script', id };
+    return timeoutMs === undefined ? { kind: 'script', id } : { kind: 'script', id, timeoutMs };
   }
 
   throw new ConfigError(`target "${key}": KIND must be "container" or "script"`);

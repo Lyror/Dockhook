@@ -1,15 +1,15 @@
 import { timingSafeEqual } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import { resolveTarget, type Config } from '../config.js';
+import { resolveTarget, type Config, type Target } from '../config.js';
 import { ACTIONS, type Action, type ActionResult } from '../types.js';
 import type { TargetLocks } from '../lock.js';
 import type { Logger } from '../log.js';
 
 export interface Executor {
-  updateContainer(containerName: string): Promise<ActionResult>;
-  restartContainer(containerName: string): Promise<ActionResult>;
-  runUserScript(scriptId: string): Promise<ActionResult>;
+  updateContainer(containerName: string, timeoutMs: number): Promise<ActionResult>;
+  restartContainer(containerName: string, timeoutMs: number): Promise<ActionResult>;
+  runUserScript(scriptId: string, timeoutMs: number): Promise<ActionResult>;
 }
 
 export interface ServerOptions {
@@ -30,6 +30,21 @@ function tokenMatches(expected: string, provided: unknown): boolean {
 
 function isAction(value: unknown): value is Action {
   return typeof value === 'string' && (ACTIONS as readonly string[]).includes(value);
+}
+
+function runAction(
+  executor: Executor,
+  action: Action,
+  target: Target,
+  timeoutMs: number,
+): Promise<ActionResult> {
+  if (action === 'update_container') {
+    return executor.updateContainer((target as { name: string }).name, timeoutMs);
+  }
+  if (action === 'restart_container') {
+    return executor.restartContainer((target as { name: string }).name, timeoutMs);
+  }
+  return executor.runUserScript((target as { id: string }).id, timeoutMs);
 }
 
 export function buildServer(options: ServerOptions): FastifyInstance {
@@ -72,6 +87,34 @@ export function buildServer(options: ServerOptions): FastifyInstance {
       return reply.code(409).send({ error: `target "${targetName}" is busy` });
     }
 
+    const effectiveTimeoutMs = target.timeoutMs ?? config.actionTimeoutMs;
+    const isAsync = body?.['async'] === true;
+
+    if (isAsync) {
+      // The lock stays held for the full background run and is released by
+      // the .finally() below, independent of this handler's response.
+      logger.info('deploy_requested', { ip: request.ip, action, target: targetName, async: true });
+      const startedAt = Date.now();
+
+      runAction(executor, action, target, effectiveTimeoutMs)
+        .then((result) => {
+          logger.info('deploy_async_finished', {
+            action,
+            target: targetName,
+            ok: result.ok,
+            durationMs: Date.now() - startedAt,
+          });
+        })
+        .catch((cause: unknown) => {
+          logger.error('deploy_crashed', { action, target: targetName, error: String(cause) });
+        })
+        .finally(() => {
+          locks.release(targetName);
+        });
+
+      return reply.code(202).send({ status: 'accepted', action, target: targetName });
+    }
+
     // Everything from here on must run inside this try/finally: if
     // logger.info below (or anything else) throws before the finally is
     // reached, the lock would otherwise never be released.
@@ -79,15 +122,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
       logger.info('deploy_requested', { ip: request.ip, action, target: targetName });
       const startedAt = Date.now();
 
-      let result: ActionResult;
-      if (action === 'update_container') {
-        result = await executor.updateContainer((target as { name: string }).name);
-      } else if (action === 'restart_container') {
-        result = await executor.restartContainer((target as { name: string }).name);
-      } else {
-        result = await executor.runUserScript((target as { id: string }).id);
-      }
-
+      const result = await runAction(executor, action, target, effectiveTimeoutMs);
       const durationMs = Date.now() - startedAt;
 
       if (!result.ok) {

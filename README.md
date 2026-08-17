@@ -85,10 +85,13 @@ NAME="MyApp"
 [backup]
 KIND="script"
 ID="nightly-backup"
+TIMEOUT_MS="1800000"
 ```
 
 `NAME` is the container name as shown on the Docker tab. `ID` is the folder name under
-`/boot/config/plugins/user.scripts/scripts/`.
+`/boot/config/plugins/user.scripts/scripts/`. `TIMEOUT_MS` is optional and overrides the
+global `ACTION_TIMEOUT_MS` for just this target — useful for a long-running script that
+would otherwise get killed before finishing. Leave it out to use the global default.
 
 ## Pipeline integration
 

@@ -110,6 +110,45 @@ describe('parseConfig', () => {
       parseConfig(settings, { '.': { KIND: 'script', ID: 'ok' } }),
     ).toThrow(ConfigError);
   });
+
+  it('leaves timeoutMs undefined when a target has no TIMEOUT_MS', () => {
+    const config = parseConfig(settings, { x: { KIND: 'container', NAME: 'y' } });
+    expect(config.targets['x']!.timeoutMs).toBeUndefined();
+  });
+
+  it('parses a per-target TIMEOUT_MS override', () => {
+    const config = parseConfig(settings, {
+      x: { KIND: 'container', NAME: 'y', TIMEOUT_MS: '1200000' },
+    });
+    expect(config.targets['x']!.timeoutMs).toBe(1200000);
+  });
+
+  it('rejects a non-numeric per-target TIMEOUT_MS', () => {
+    expect(() =>
+      parseConfig(settings, { x: { KIND: 'container', NAME: 'y', TIMEOUT_MS: 'abc' } }),
+    ).toThrow(/timeout/i);
+  });
+
+  it('rejects a per-target TIMEOUT_MS below 1000', () => {
+    expect(() =>
+      parseConfig(settings, { x: { KIND: 'container', NAME: 'y', TIMEOUT_MS: '999' } }),
+    ).toThrow(/timeout/i);
+  });
+
+  it('rejects a per-target TIMEOUT_MS above 24 hours', () => {
+    expect(() =>
+      parseConfig(settings, {
+        x: { KIND: 'container', NAME: 'y', TIMEOUT_MS: String(25 * 60 * 60 * 1000) },
+      }),
+    ).toThrow(/timeout/i);
+  });
+
+  it('parses a per-target TIMEOUT_MS override for a script target', () => {
+    const config = parseConfig(settings, {
+      x: { KIND: 'script', ID: 'y', TIMEOUT_MS: '1200000' },
+    });
+    expect(config.targets['x']!.timeoutMs).toBe(1200000);
+  });
 });
 
 describe('resolveTarget', () => {

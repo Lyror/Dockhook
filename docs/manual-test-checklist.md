@@ -47,6 +47,21 @@ Work through it before tagging a release.
 - [ ] `run_userscript` runs the script and returns its output
 - [ ] A user script that exits non-zero yields a 500 with the exit code
 
+## Async mode and per-target timeout
+
+- [ ] `{"action":"restart_container","target":"x","async":true}` returns 202 immediately
+      with `{"status":"accepted",...}`, not waiting for the restart to finish
+- [ ] The actual result of an async action appears in `/var/log/dockhook.log` as
+      `deploy_async_finished` once it completes
+- [ ] A second async (or sync) request for the same target while the first is still
+      running yields 409, same as the synchronous case
+- [ ] After the async action finishes, the target is no longer busy — a follow-up request
+      succeeds
+- [ ] A target with `TIMEOUT_MS` set in `targets.cfg` is not killed by the global
+      `ACTION_TIMEOUT_MS` if the override is longer, and is killed sooner if it is shorter
+- [ ] Setting a target's timeout override on the settings page and reloading shows the
+      saved value in the "Timeout override (ms)" column
+
 ## Failure paths
 
 - [ ] A wrong token yields 401 and is logged with the source IP

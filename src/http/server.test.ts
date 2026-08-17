@@ -11,6 +11,7 @@ const config = parseConfig(
   {
     myapp: { KIND: 'container', NAME: 'MyApp' },
     backup: { KIND: 'script', ID: 'nightly-backup' },
+    slow: { KIND: 'script', ID: 'slow-backup', TIMEOUT_MS: '1200000' },
   },
 );
 
@@ -124,7 +125,7 @@ describe('POST /deploy dispatch', () => {
       payload: { action: 'update_container', target: 'myapp' },
     });
     expect(response.statusCode).toBe(200);
-    expect(executor.updateContainer).toHaveBeenCalledWith('MyApp');
+    expect(executor.updateContainer).toHaveBeenCalledWith('MyApp', 600000);
   });
 
   it('maps restart_container to the executor', async () => {
@@ -134,7 +135,7 @@ describe('POST /deploy dispatch', () => {
       headers: auth,
       payload: { action: 'restart_container', target: 'myapp' },
     });
-    expect(executor.restartContainer).toHaveBeenCalledWith('MyApp');
+    expect(executor.restartContainer).toHaveBeenCalledWith('MyApp', 600000);
   });
 
   it('maps run_userscript to the executor with the configured script id', async () => {
@@ -144,7 +145,17 @@ describe('POST /deploy dispatch', () => {
       headers: auth,
       payload: { action: 'run_userscript', target: 'backup' },
     });
-    expect(executor.runUserScript).toHaveBeenCalledWith('nightly-backup');
+    expect(executor.runUserScript).toHaveBeenCalledWith('nightly-backup', 600000);
+  });
+
+  it('passes a per-target TIMEOUT_MS override to the executor instead of the global default', async () => {
+    await makeServer().inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'run_userscript', target: 'slow' },
+    });
+    expect(executor.runUserScript).toHaveBeenCalledWith('slow-backup', 1200000);
   });
 
   it('returns 500 with the output when the action fails', async () => {
@@ -291,6 +302,130 @@ describe('POST /deploy dispatch', () => {
     await server.inject(request);
 
     const second = await server.inject(request);
+    expect(second.statusCode).not.toBe(409);
+  });
+});
+
+describe('POST /deploy with async: true', () => {
+  const auth = { 'x-webhook-token': TOKEN };
+
+  it('returns 202 with an accepted status instead of waiting for the result', async () => {
+    let resolveAction!: (result: { ok: true; summary: string; output: string }) => void;
+    executor.restartContainer = vi.fn(
+      () =>
+        new Promise<{ ok: true; summary: string; output: string }>((resolve) => {
+          resolveAction = resolve;
+        }),
+    );
+
+    const response = await makeServer().inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp', async: true },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      status: 'accepted',
+      action: 'restart_container',
+      target: 'myapp',
+    });
+
+    // Clean up the still-pending executor call so it doesn't leak into other tests.
+    resolveAction({ ok: true, summary: 'restarted', output: '' });
+  });
+
+  it('still enforces the lock: a busy target returns 409 and never calls the executor', async () => {
+    const locks = new TargetLocks();
+    locks.tryAcquire('myapp');
+
+    const server = buildServer({
+      config,
+      logger: createLogger((line) => lines.push(line)),
+      locks,
+      executor,
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp', async: true },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(executor.restartContainer).not.toHaveBeenCalled();
+  });
+
+  it('logs deploy_async_finished once the background action completes', async () => {
+    await makeServer().inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp', async: true },
+    });
+
+    // The response returns before the background action settles; flush microtasks.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const entry = lines
+      .map((l) => JSON.parse(l))
+      .find((e) => e.event === 'deploy_async_finished');
+    expect(entry).toBeDefined();
+    expect(entry.ok).toBe(true);
+    expect(entry.action).toBe('restart_container');
+    expect(entry.target).toBe('myapp');
+  });
+
+  it('releases the lock once the background action completes', async () => {
+    const server = makeServer();
+
+    await server.inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp', async: true },
+    });
+
+    // Give the detached background execution a chance to finish and release the lock.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const second = await server.inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp' },
+    });
+
+    expect(second.statusCode).toBe(200);
+  });
+
+  it('logs deploy_crashed and still releases the lock when the background action throws', async () => {
+    executor.restartContainer = vi.fn(async () => {
+      throw new Error('boom');
+    });
+
+    const server = makeServer();
+
+    await server.inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp', async: true },
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const entry = lines.map((l) => JSON.parse(l)).find((e) => e.event === 'deploy_crashed');
+    expect(entry).toBeDefined();
+
+    const second = await server.inject({
+      method: 'POST',
+      url: '/deploy',
+      headers: auth,
+      payload: { action: 'restart_container', target: 'myapp' },
+    });
     expect(second.statusCode).not.toBe(409);
   });
 });
