@@ -134,4 +134,4 @@ cut off `main` never rewrites it).
 The `.plg`'s `pluginURL` (`raw/main/dockhook.plg`) must stay stable — Unraid's plugin
 manager re-fetches exactly that URL to detect updates — while `txzURL` is version-pinned
 to the release asset. `<CHANGES>` is maintained by hand; it is what the plugin manager
-displays. Full steps in `README.md` § Releasing.
+displays. Full steps in `CONTRIBUTING.md` § Releasing.
