@@ -7,7 +7,7 @@
 <!ENTITY gitURL    "https://github.com/Lyror/Dockhook/raw/main">
 <!ENTITY pluginURL "&gitURL;/&name;.plg">
 <!ENTITY txzURL    "&gitURL;/build/&name;-&version;-x86_64-1.txz">
-<!ENTITY md5       "d14c992dbc3cd317bee1bce8c93cb0b1">
+<!ENTITY md5       "934ed963492f7a63e378e2096aceeec1">
 <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 <!ENTITY boot      "/boot/config/plugins/&name;">
 ]>

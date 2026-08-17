@@ -152,7 +152,11 @@ function dhRemoveRow(button) {
 }
 
 function dhSaveTargets() {
-  const payload = $('#dh-targets-form').serializeArray();
+  // Unraid injects its own hidden csrf_token input into every <form> on the
+  // page. Drop it before adding ours: a duplicated csrf_token field in the
+  // POST body causes PHP/nginx to drop the key entirely, which always fails
+  // the CSRF check server-side regardless of the (correct) value sent.
+  const payload = $('#dh-targets-form').serializeArray().filter((f) => f.name !== 'csrf_token');
   payload.push({ name: 'csrf_token', value: dhCsrf });
   $.post(dhTargetsUrl, $.param(payload), function (data) {
     if (!data.ok) { swal({ title: 'Invalid targets', text: data.error, type: 'error' }); return; }

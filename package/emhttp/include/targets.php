@@ -1,12 +1,21 @@
 <?php
 // Writes the sectioned targets.cfg. /update.php only handles flat .cfg files,
-// so this endpoint exists — and therefore must validate the CSRF token itself.
-
-$var = parse_ini_file('/var/local/emhttp/var.ini');
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $var['csrf_token']) {
-  http_response_code(403);
-  exit(json_encode(['ok' => false, 'error' => 'Security token validation failed']));
-}
+// so this endpoint exists.
+//
+// The client still sends csrf_token on every request (see dockhook.page).
+// We do NOT re-validate it here: on current Unraid releases the webGUI itself
+// intercepts every POST to a plugin PHP file under /usr/local/emhttp/plugins/,
+// rejects the request outright (empty body, before this script ever runs) if
+// csrf_token is missing/wrong/misnamed, and strips the field from $_POST once
+// it has verified it — so $_POST['csrf_token'] is never observable here on a
+// request that actually reaches this point. A manual re-check against
+// $_POST['csrf_token'] would therefore always fail, even for a legitimate
+// request. Verified empirically against a live Unraid 7.3.1 install: wrong
+// token, missing token, and a differently-named token field are all blocked
+// before this script executes; only a correctly-named, valid token lets a
+// request through. Unverified on Unraid 6.x — if a future report shows this
+// script reachable with a forged/missing csrf_token there, this needs a
+// version-aware fallback.
 
 header('Content-Type: application/json');
 
