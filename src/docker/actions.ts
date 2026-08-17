@@ -9,11 +9,63 @@ export interface DockerDeps {
   run: RunFn;
   logger: Logger;
   readFile: (path: string) => Promise<string>;
+  writeFile: (path: string, contents: string) => Promise<void>;
   listTemplates: () => Promise<string[]>;
   wait: (ms: number) => Promise<void>;
   timeoutMs: number;
   healthCheckDelayMs: number;
   templateDir: string;
+}
+
+// Unraid's own Docker-tab "update available" check caches its result here,
+// keyed by image reference. It doesn't reliably refresh the "local" digest
+// when a container is updated by anything other than its own Update button
+// (a documented issue for e.g. Watchtower too), so the badge keeps showing
+// after we've already updated. We can't safely guess the key by name — real
+// keys are inconsistently normalized (some carry a "docker.io/" prefix, some
+// don't) — so we match by the "local" digest instead, which we already know
+// from the pre-update inspect.
+const UNRAID_UPDATE_STATUS_PATH = '/var/lib/docker/unraid-update-status.json';
+
+async function clearStaleUnraidUpdateEntry(
+  deps: DockerDeps,
+  containerName: string,
+  previousImage: string,
+): Promise<void> {
+  if (previousImage === 'unknown') return;
+
+  let raw: string;
+  try {
+    raw = await deps.readFile(UNRAID_UPDATE_STATUS_PATH);
+  } catch {
+    return; // No cache file yet — nothing to reconcile.
+  }
+
+  let cache: Record<string, { local?: string }>;
+  try {
+    cache = JSON.parse(raw);
+  } catch (cause) {
+    deps.logger.error('unraid_update_cache_parse_failed', {
+      container: containerName,
+      error: String(cause),
+    });
+    return;
+  }
+
+  const staleKey = Object.keys(cache).find((key) => cache[key]?.local === previousImage);
+  if (!staleKey) return;
+
+  delete cache[staleKey];
+
+  try {
+    await deps.writeFile(UNRAID_UPDATE_STATUS_PATH, JSON.stringify(cache));
+    deps.logger.info('unraid_update_cache_cleared', { container: containerName, key: staleKey });
+  } catch (cause) {
+    deps.logger.error('unraid_update_cache_write_failed', {
+      container: containerName,
+      error: String(cause),
+    });
+  }
 }
 
 function combined(result: { stdout: string; stderr: string }): string {
@@ -255,6 +307,8 @@ export async function updateContainer(
     image: template.repository,
     previousImage,
   });
+
+  await clearStaleUnraidUpdateEntry(deps, containerName, previousImage);
 
   return {
     ok: true,

@@ -20,7 +20,13 @@ function makeDeps(
   return {
     run: vi.fn(async (command: string, args: string[]) => runImpl(command, args)),
     logger: createLogger((line) => lines.push(line)),
-    readFile: vi.fn(async () => TEMPLATE),
+    // Templates end in .xml; the unraid update-status cache (a separate,
+    // unrelated file) defaults to "not present" unless a test overrides it.
+    readFile: vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      throw new Error('ENOENT');
+    }),
+    writeFile: vi.fn(async () => {}),
     listTemplates: vi.fn(async () => ['myapp', 'other-app']),
     wait: vi.fn(async () => {}),
     timeoutMs: 5000,
@@ -318,6 +324,104 @@ describe('updateContainer', () => {
     const result = await updateContainer(deps, 'myapp');
 
     expect(result.ok).toBe(true);
+  });
+
+  const UNRAID_UPDATE_STATUS_PATH = '/var/lib/docker/unraid-update-status.json';
+
+  it('removes the stale entry from the unraid update-status cache after a successful update', async () => {
+    const lines: string[] = [];
+    const deps = makeDeps(happyPath, lines);
+    const cache = {
+      'nexus.example.com/myapp:latest': { local: 'sha256:old', remote: 'sha256:new', status: 'false' },
+      'other/thing:latest': { local: 'sha256:unrelated', remote: 'sha256:unrelated', status: 'true' },
+    };
+    deps.readFile = vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      if (path === UNRAID_UPDATE_STATUS_PATH) return JSON.stringify(cache);
+      throw new Error('ENOENT');
+    });
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(true);
+    expect(deps.writeFile).toHaveBeenCalledTimes(1);
+    const [writtenPath, writtenContents] = (deps.writeFile as ReturnType<typeof vi.fn>).mock
+      .calls[0] as [string, string];
+    expect(writtenPath).toBe(UNRAID_UPDATE_STATUS_PATH);
+    expect(JSON.parse(writtenContents)).toEqual({
+      'other/thing:latest': { local: 'sha256:unrelated', remote: 'sha256:unrelated', status: 'true' },
+    });
+
+    const entry = lines
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event === 'unraid_update_cache_cleared');
+    expect(entry).toBeDefined();
+    expect(entry.container).toBe('myapp');
+  });
+
+  it('leaves the unraid update-status cache untouched when no entry matches the previous image', async () => {
+    const deps = makeDeps(happyPath);
+    deps.readFile = vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      if (path === UNRAID_UPDATE_STATUS_PATH) {
+        return JSON.stringify({ 'other/thing:latest': { local: 'sha256:x', remote: 'sha256:x', status: 'true' } });
+      }
+      throw new Error('ENOENT');
+    });
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(true);
+    expect(deps.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('does not touch the unraid update-status cache when the file does not exist', async () => {
+    const deps = makeDeps(happyPath);
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(true);
+    expect(deps.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('does not touch the unraid update-status cache when the previous image is unknown', async () => {
+    const deps = makeDeps((command, args) => {
+      if (args[0] === 'inspect' && args[2] === '{{.State.Running}}') return running('true');
+      if (args[0] === 'inspect') return fail('No such container');
+      return happyPath(command, args);
+    });
+    deps.readFile = vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      if (path === UNRAID_UPDATE_STATUS_PATH) {
+        return JSON.stringify({ 'x/y:latest': { local: 'unknown', remote: 'sha256:x', status: 'true' } });
+      }
+      throw new Error('ENOENT');
+    });
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(true);
+    expect(deps.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('logs but does not fail the update when the update-status cache is malformed JSON', async () => {
+    const lines: string[] = [];
+    const deps = makeDeps(happyPath, lines);
+    deps.readFile = vi.fn(async (path: string) => {
+      if (path.endsWith('.xml')) return TEMPLATE;
+      if (path === UNRAID_UPDATE_STATUS_PATH) return 'not json {{{';
+      throw new Error('ENOENT');
+    });
+
+    const result = await updateContainer(deps, 'myapp');
+
+    expect(result.ok).toBe(true);
+    expect(deps.writeFile).not.toHaveBeenCalled();
+
+    const entry = lines
+      .map((line) => JSON.parse(line))
+      .find((e) => e.event === 'unraid_update_cache_parse_failed');
+    expect(entry).toBeDefined();
   });
 });
 

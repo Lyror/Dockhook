@@ -1,4 +1,4 @@
-import { access, readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createLogger } from './log.js';
 import { createRotatingWriter } from './logfile.js';
@@ -49,6 +49,7 @@ async function main(): Promise<void> {
     run,
     logger,
     readFile: (path) => readFile(path, 'utf8'),
+    writeFile: (path, contents) => writeFile(path, contents, 'utf8'),
     // Unraid names user templates my-<container>.xml; strip that back down to
     // the container names so a failed lookup can suggest the real ones.
     listTemplates: async () =>
