@@ -71,20 +71,15 @@ async function clearStaleUnraidUpdateEntry(
     return;
   }
 
-  // Best-effort: ask Unraid's own updater to re-inspect this one image right
-  // now, via its documented DockerUpdate::reloadUpdateStatus() API, instead
-  // of waiting for its next scheduled check or a manual "Check for Updates"
-  // click. staleKey is the exact, correctly-normalized key Unraid itself
-  // already uses for this image, found above — no name-guessing needed.
+  // Best-effort: run the same full update check Unraid's own "Check for
+  // Updates" button triggers. A targeted per-image reload
+  // (DockerUpdate::reloadUpdateStatus()) does refresh this JSON file on its
+  // own, but empirically the Docker tab's badge doesn't pick that up until
+  // this full check runs — only clicking "Check for Updates" actually
+  // cleared it, so that's what we replicate here instead.
   const reload = await deps.run(
-    'php',
-    [
-      '-r',
-      'require_once("/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php");' +
-        '$u = new DockerUpdate(); $u->reloadUpdateStatus($argv[1]);',
-      '--',
-      staleKey,
-    ],
+    '/usr/bin/php',
+    ['-q', '/usr/local/emhttp/plugins/dynamix.docker.manager/scripts/dockerupdate', 'check'],
     { timeoutMs: deps.timeoutMs },
   );
 

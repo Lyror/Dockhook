@@ -360,7 +360,7 @@ describe('updateContainer', () => {
     expect(entry.container).toBe('myapp');
   });
 
-  it('asks unraid to reload the update status for the entry it just cleared', async () => {
+  it('asks unraid to run a full update check after clearing a stale entry', async () => {
     const calls: [string, string[]][] = [];
     const deps = makeDeps((command, args) => {
       calls.push([command, args]);
@@ -377,17 +377,17 @@ describe('updateContainer', () => {
 
     await updateContainer(deps, 'myapp');
 
-    const phpCall = calls.find(([command]) => command === 'php');
+    const phpCall = calls.find(([command]) => command === '/usr/bin/php');
     expect(phpCall).toBeDefined();
     const [, args] = phpCall!;
-    expect(args).toContain('nexus.example.com/myapp:latest');
-    expect(args.join(' ')).toContain('reloadUpdateStatus');
+    expect(args).toContain('check');
+    expect(args.join(' ')).toContain('dynamix.docker.manager/scripts/dockerupdate');
   });
 
   it('logs but does not fail the update when the unraid reload command fails', async () => {
     const lines: string[] = [];
     const deps = makeDeps((command, args) => {
-      if (command === 'php') return fail('php: command not found');
+      if (command === '/usr/bin/php') return fail('php: command not found');
       return happyPath(command, args);
     }, lines);
     const cache = {
@@ -426,7 +426,7 @@ describe('updateContainer', () => {
 
     expect(result.ok).toBe(true);
     expect(deps.writeFile).not.toHaveBeenCalled();
-    expect(calls.find(([command]) => command === 'php')).toBeUndefined();
+    expect(calls.find(([command]) => command === '/usr/bin/php')).toBeUndefined();
   });
 
   it('does not touch the unraid update-status cache when the file does not exist', async () => {
