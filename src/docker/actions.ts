@@ -41,7 +41,7 @@ async function clearStaleUnraidUpdateEntry(
     return; // No cache file yet — nothing to reconcile.
   }
 
-  let cache: Record<string, { local?: string }>;
+  let cache: Record<string, { local: string | null }>;
   try {
     cache = JSON.parse(raw);
   } catch (cause) {
@@ -55,7 +55,10 @@ async function clearStaleUnraidUpdateEntry(
   const staleKey = Object.keys(cache).find((key) => cache[key]?.local === previousImage);
   if (!staleKey) return;
 
-  delete cache[staleKey];
+  // Null out just the local digest (not the whole entry) so Unraid's own
+  // checker re-inspects it on the next pass, per the documented remediation
+  // for this exact staleness issue: https://plugin-docs.mstrhakr.com/docs/advanced/docker-integration.html
+  cache[staleKey]!.local = null;
 
   try {
     await deps.writeFile(UNRAID_UPDATE_STATUS_PATH, JSON.stringify(cache));

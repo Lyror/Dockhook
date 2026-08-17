@@ -328,7 +328,7 @@ describe('updateContainer', () => {
 
   const UNRAID_UPDATE_STATUS_PATH = '/var/lib/docker/unraid-update-status.json';
 
-  it('removes the stale entry from the unraid update-status cache after a successful update', async () => {
+  it('nulls the local digest of the stale entry in the unraid update-status cache after a successful update', async () => {
     const lines: string[] = [];
     const deps = makeDeps(happyPath, lines);
     const cache = {
@@ -349,6 +349,7 @@ describe('updateContainer', () => {
       .calls[0] as [string, string];
     expect(writtenPath).toBe(UNRAID_UPDATE_STATUS_PATH);
     expect(JSON.parse(writtenContents)).toEqual({
+      'nexus.example.com/myapp:latest': { local: null, remote: 'sha256:new', status: 'false' },
       'other/thing:latest': { local: 'sha256:unrelated', remote: 'sha256:unrelated', status: 'true' },
     });
 

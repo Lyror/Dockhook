@@ -83,12 +83,13 @@ synchronous or `async`. Leave it blank to use the global default.
 ## Unraid's "update available" badge after `update_container`
 
 Unraid's own Docker tab caches its update-check result in
-`/var/lib/docker/unraid-update-status.json`, and doesn't reliably refresh it when a
-container is updated by anything other than its own Update button (a known issue that also
-affects tools like Watchtower). After a successful `update_container`, the plugin removes
-the stale cache entry for the previous image itself, so the badge clears on Unraid's next
-check instead of sticking around indefinitely. This only touches the one entry for the
-container that was just updated — everything else in the cache is left alone.
+`/var/lib/docker/unraid-update-status.json`, and doesn't reliably refresh the cached local
+digest when a container is updated by anything other than its own Update button (a known
+issue that also affects tools like Watchtower). After a successful `update_container`, the
+plugin finds the entry for the previous image and nulls out just its cached local digest —
+the documented remediation for this — so Unraid re-inspects it on the next check instead of
+showing a stale badge indefinitely. This only touches the one entry for the container that
+was just updated — everything else in the cache is left alone.
 
 ## When an update fails
 
